@@ -1,0 +1,38 @@
+// All lines seem to be missing the required "~"
+
+ISA*00*          *00*          *ZZ*V7BS           *ZZ*00200          *250912*0751*^*00501*000000001*1*P*:
+GS*HC*V7BS*00200*20250912*0751*2*X*005010X222A1 // Time should be HHMMSSDD; Different group control number (should be 1?)
+ST*837*0001*005010X222A1
+BHT*0019*00*1*20250912*0751*CH // BHT03 may need to be 9 characters long (to test)
+NM1*41*2*WALNUT HEALTH*****46*931416822 // Using EIN (931416822) instead of V7BS in NM109 - i think it should be V7BS
+PER*IC*DANIEL BARRON*TE*6172493828*EM*DANIEL@WALNUTHEALTH.BOSTON 
+NM1*40*2*BLUE CROSS BLUE SHIELD OF MASSACHUSETTS*****46*00200
+HL*1**20*1
+PRV*BI*PXC*208VP0000X // We don't include this in our pipeline, but it looks valid and correct to me (other than missing tilde)
+NM1*85*2*WALNUT HEALTH*****XX*1376222422
+N3*83 LEONARD ST
+N4*BELMONT*MA*024782508
+REF*EI*931416822
+HL*2*1*22*1
+SBR*P**174182******BL
+NM1*IL*1*RATCLIFFE*JOHN****MI*MTN960022279
+NM1*PR*2*BLUE CROSS BLUE SHIELD OF MASSACHUSETTS*****PI*00200
+N3*101 HUNTINGTON AVE // We don't include this in ours
+N4*BOSTON*MA*02199 // We don't include this in ours
+HL*3*2*23*0
+PAT*01
+NM1*QC*1*RATCLIFFE*CATHERINE
+N3*2610 SINGLE STREET
+N4*CHARLESTOWN*MA*02129
+DMG*D8*19560714*F
+CLM*1-7*199.14***11:B:1*Y*A*Y*Y*P // Different Claim submitter identifier (1-7) - not sure this will work; Patient signature source code is included (CLM10), whereas in ours it isn't
+HI*ABK:F902
+NM1*82*1*BARRON*DANIEL****XX*1457707333
+PRV*PE*PXC*207Q00000X // We don't include this in ours, but it looks valid
+NM1*DQ*1*ADMINISTRATOR // Need to figure out why this was added - supervising provider not needed
+LX*1
+SV1*HC:99204*199.14*UN*1***1
+DTP*472*D8*20250603
+SE*32*0001
+GE*1*2
+IEA*1*000000001

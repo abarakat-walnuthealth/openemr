@@ -54,8 +54,11 @@ class BillingClaimBatch
         $this->bat_content = '';
         $this->bat_gscount = 0;
         $this->bat_stcount = 0;
-        $this->bat_time = time();
+        $dt = new \DateTime();  // Use DateTime to get microseconds for real deciseconds
+        $this->bat_time = $dt->getTimestamp();  // Keep timestamp for compatibility
         $this->bat_hhmm = date('Hi', $this->bat_time);
+        // BCBSMA requires HHMMSSDD format for GS05 - using real deciseconds
+        $this->bat_hhmmssdd = $dt->format('His') . substr($dt->format('u'), 0, 2);  // Real deciseconds from microseconds
         $this->bat_yymmdd = date('ymd', $this->bat_time);
         $this->bat_yyyymmdd = date('Ymd', $this->bat_time);
         $this->bat_icn = (strpos($this->context['claims'][0]->action ?? '', 'validate') !== false) ? '000000001' : BillingClaimBatchControlNumber::getIsa13();
@@ -229,8 +232,9 @@ class BillingClaimBatch
                     ++$this->bat_gscount;
                     // We increment the ICN to use as the batch counter.
                     // We lose the zero padding to 9 digits but that's okay.
+                    // BCBSMA fix: Using bat_hhmmssdd (8 digits) instead of bat_hhmm (4 digits)
                     $this->bat_content .= "GS*HC*" . $elems[2] . "*" . $elems[3] . "*" .
-                        $this->bat_yyyymmdd . "*" . $this->bat_hhmm . "*" . $this->bat_gs06 . "*" .
+                        $this->bat_yyyymmdd . "*" . $this->bat_hhmmssdd . "*" . $this->bat_gs06 . "*" .
                         "X" . "*" . $elems[8] . "~";
                 }
                 continue;
@@ -248,8 +252,20 @@ class BillingClaimBatch
             }
 
             if ($elems[0] == 'BHT') {
-                // needle is set in OpenEMR\Billing\X125010837P
-                $this->bat_content .= substr_replace($seg, '*' . "1" . '*', strpos($seg, '*0123*'), 6);
+                // Replace the placeholder reference ID with the transaction set number
+                // This allows proper tracking within batched 837P files
+                // The placeholder from X125010837P is "000000123" (9 digits padded for BCBSMA)
+                $placeholder = '*000000123*';
+                // Use the current ST count padded to 9 digits to match BCBSMA requirements
+                $bht_reference = str_pad((string)$this->bat_stcount, 9, '0', STR_PAD_LEFT);
+                $replacement = '*' . $bht_reference . '*';
+                $pos = strpos($seg, $placeholder);
+                if ($pos !== false) {
+                    $this->bat_content .= substr_replace($seg, $replacement, $pos, strlen($placeholder));
+                } else {
+                    // Fallback if placeholder not found - just use the segment as-is
+                    $this->bat_content .= $seg;
+                }
                 $this->bat_content .= "~";
                 continue;
             }

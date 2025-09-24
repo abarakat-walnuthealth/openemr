@@ -76,6 +76,9 @@ $fname = $claim_file_dir . $fname;
 
 if (strtolower(substr($fname, (strlen($fname) - 4))) == ".pdf") {
     $content_type = "application/pdf";
+} elseif (strtolower(substr($fname, (strlen($fname) - 4))) == ".837") {
+    // EDI X12 837 Healthcare Claim files
+    $content_type = "application/edi-x12";
 }
 
 if (!file_exists($fname)) {
