@@ -252,12 +252,12 @@ class BillingClaimBatch
             }
 
             if ($elems[0] == 'BHT') {
-                // Replace the placeholder reference ID with the transaction set number
-                // This allows proper tracking within batched 837P files
+                // Replace the placeholder reference ID with the ICN to match ISA13
+                // This ensures BHT03 matches ISA13 for BCBSMA compliance and prevents duplicate rejections
                 // The placeholder from X125010837P is "000000123" (9 digits padded for BCBSMA)
                 $placeholder = '*000000123*';
-                // Use the current ST count padded to 9 digits to match BCBSMA requirements
-                $bht_reference = str_pad((string)$this->bat_stcount, 9, '0', STR_PAD_LEFT);
+                // Use the ICN (Interchange Control Number) which matches ISA13 for uniqueness
+                $bht_reference = $this->bat_icn;
                 $replacement = '*' . $bht_reference . '*';
                 $pos = strpos($seg, $placeholder);
                 if ($pos !== false) {
