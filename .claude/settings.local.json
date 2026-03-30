@@ -1,0 +1,15 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(find:*)",
+      "WebSearch",
+      "WebFetch(domain:community.open-emr.org)",
+      "Bash(docker compose exec:*)",
+      "Read(//Users/andrewbarakat/Desktop/Walnut/GitHub/openemr-on-eks/**)",
+      "Bash(docker compose logs:*)",
+      "Read(//Users/andrewbarakat/Desktop/Walnut/GitHub/openemr-devops/docker/openemr/**)"
+    ],
+    "deny": [],
+    "ask": []
+  }
+}

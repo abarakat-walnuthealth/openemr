@@ -109,7 +109,20 @@ class GeneratorX12Direct extends AbstractGenerator implements GeneratorInterface
 
             $batch = new BillingClaimBatch('.txt', $context);
             $filename = $batch->getBatFilename();
-            $filename = str_replace('batch', 'batch-p' . $row['id'], $filename);
+
+            // Check if this is BCBSMA and use their specific naming convention
+            if (
+                stripos($row['name'] ?? '', 'BCBSMA') !== false ||
+                stripos($row['name'] ?? '', 'BLUE CROSS') !== false ||
+                stripos($row['x12_sender_id'] ?? '', 'V7BS') !== false
+            ) {
+                // BCBSMA requires: BCBSMA.V7BS.claim.YYYYMMDDHHmmss.837
+                $dt = new \DateTime();
+                $filename = 'BCBSMA.V7BS.claim.' . $dt->format('YmdHis') . '.837';
+            } else {
+                // Standard naming for other partners
+                $filename = str_replace('batch', 'batch-p' . $row['id'], $filename);
+            }
             $batch->setBatFilename($filename);
 
             // Only set the batch file directory if we have a valid directory

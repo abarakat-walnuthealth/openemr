@@ -17,6 +17,7 @@
 
 namespace OpenEMR\Billing;
 
+use DateTime;
 use OpenEMR\Billing\BillingProcessor\BillingClaimBatchControlNumber;
 use OpenEMR\Billing\Claim;
 
@@ -47,7 +48,8 @@ class X125010837P
         &$edicount = 0,
         &$patSegmentCount = 0
     ) {
-        $today = time();
+        $dt = new DateTime();
+        $today = $dt->getTimestamp();  // For compatibility with existing code
         $out = '';
         $claim = new Claim($pid, $encounter, $x12_partner);
 
@@ -80,7 +82,7 @@ class X125010837P
             "*" . $claim->x12gsgs02() .
             "*" . trim($claim->x12gs03()) .
             "*" . date('Ymd', $today) .
-            "*" . date('Hi', $today) .
+            "*" . $dt->format('His') . substr($dt->format('u'), 0, 2) .  // BCBSMA requires HHMMSSDD format with real deciseconds
             "*" . "1" . // TODO add a tracking number
             "*" . "X" .
             "*" . $claim->x12gsversionstring() .
@@ -107,7 +109,7 @@ class X125010837P
             $out .= "BHT" .
                 "*" . "0019" .                             // 0019 is required here
                 "*" . "00" .                               // 00 = original transmission
-                "*" . "0123" .                             // reference identification
+                "*" . str_pad("0123", 9, "0", STR_PAD_LEFT) .  // BCBSMA requires 9-digit reference ID
                 "*" . date('Ymd', $today) .           // transaction creation date
                 "*" . date('Hi', $today) .            // transaction creation time
                 "*" . ($encounter_claim ? "RP" : "CH") .  // RP = reporting, CH = chargeable
@@ -130,7 +132,7 @@ class X125010837P
                     "*" .
                     "*" .
                     "*" . "46" .
-                    "*" . $claim->x12_sender_id();
+                    "*" . trim($claim->x12_sender_id());
                 // use provider name since using ssn as tax id
                 // insurance companies may be deprecating use of ssn 7-10-21
                 } else {
@@ -160,7 +162,7 @@ class X125010837P
                     "*" .
                     "*" .
                     "*" . "46" .
-                    "*" . $claim->billingIdCode();
+                    "*" . trim($claim->billingIdCode());
                 // else use provider's group name
                 } else {
                     $billingFacilityName = substr($claim->billingFacilityName(), 0, 60);
@@ -204,7 +206,7 @@ class X125010837P
                 "*" .
                 "*" .
                 "*" . "46" .
-                "*" . $claim->clearingHouseETIN() .
+                "*" . trim($claim->x12gsreceiverid()) .
                 "~\n";
 
             ++$edicount;
@@ -217,14 +219,15 @@ class X125010837P
             "~\n";
 
             // Situational PRV segment for provider taxonomy.
-            if ($claim->facilityTaxonomy()) {
-                ++$edicount;
-                $out .= "PRV" .
-                "*" . "BI" .
-                "*" . "PXC" .
-                "*" . $claim->facilityTaxonomy() .
-                "~\n";
-            }
+            // BCBSMA treats PRV as optional, commenting out to reduce potential errors
+            // if ($claim->facilityTaxonomy()) {
+            //     ++$edicount;
+            //     $out .= "PRV" .
+            //     "*" . "BI" .
+            //     "*" . "PXC" .
+            //     "*" . $claim->facilityTaxonomy() .
+            //     "~\n";
+            // }
 
             // Situational CUR segment (foreign currency information) omitted here.
             ++$edicount;
@@ -269,6 +272,11 @@ class X125010837P
             } else {
                 $log .= "*** Billing facility has no street.\n";
             }
+            // Add address line 2 if needed (hardcoded for WALNUT HEALTH)
+            // TODO: Add a proper street2 field to facility table
+            if ($claim->billingFacilityName() == 'WALNUT HEALTH') {
+                $out .= "*SUITE 6";
+            }
             $out .= "~\n";
 
             ++$edicount;
@@ -293,17 +301,21 @@ class X125010837P
             $out .= $claim->billingFacilityZip();
             $out .= "~\n";
 
-            if ($claim->billingFacilityNPI() && $claim->billingFacilityETIN()) {
+            // REF segment for federal tax ID (EIN)
+            // For WALNUT HEALTH, we need to include the EIN even when using SSN as Tax ID type
+            $etin = $claim->billingFacilityETIN();
+            if (!$etin && $claim->billingFacilityName() == 'WALNUT HEALTH') {
+                // Hardcode WALNUT HEALTH's EIN when not in facility settings
+                $etin = '931416822';
+            }
+            if ($etin) {
                 ++$edicount;
                 $out .= "REF";
-                if ($claim->federalIdType()) {
-                    $out .= "*" . $claim->federalIdType();
-                } else {
-                    $out .= "*EI"; // For dealing with the situation before adding TaxId type In facility.
-                }
-                $out .= "*" . $claim->billingFacilityETIN() . "~\n";
+                // Always use EI for the REF segment (even when federalIdType is SY)
+                $out .= "*EI";
+                $out .= "*" . $etin . "~\n";
             } else {
-                $log .= "*** No billing facility NPI and/or ETIN.\n";
+                $log .= "*** No billing facility ETIN.\n";
             }
             if ($claim->providerNumberType() && $claim->providerNumber() && !$claim->billingFacilityNPI()) {
                 ++$edicount;
@@ -444,6 +456,25 @@ class X125010837P
         }
         $out .= "~\n";
 
+        // DMG segment for subscriber demographics - required by BCBSMA
+        ++$edicount;
+        $out .= "DMG" .
+            "*" .
+            "D8" .
+            "*";
+        if ($claim->insuredDOB()) {
+            $out .= $claim->insuredDOB();
+        } else {
+            $log .= "*** Missing insured DOB.\n";
+        }
+        $out .= "*";
+        if ($claim->insuredSex()) {
+            $out .= $claim->insuredSex();
+        } else {
+            $log .= "*** Missing insured sex.\n";
+        }
+        $out .= "~\n";
+
         // For 5010, further subscriber info is sent only if they are the patient.
         if ($claim->isSelfOfInsured()) {
             ++$edicount;
@@ -481,24 +512,6 @@ class X125010837P
             }
             $out .= $claim->x12Zip($claim->insuredZip());
             $out .= "~\n";
-
-            ++$edicount;
-            $out .= "DMG" .
-                "*" .
-                "D8" .
-                "*";
-            if ($claim->insuredDOB()) {
-                $out .= $claim->insuredDOB();
-            } else {
-                $log .= "*** Missing insured DOB.\n";
-            }
-            $out .= "*";
-            if ($claim->insuredSex()) {
-                $out .= $claim->insuredSex();
-            } else {
-                $log .= "*** Missing insured sex.\n";
-            }
-            $out .= "~\n";
         }
 
         // Segment REF*SY (Subscriber Secondary Identification) omitted.
@@ -534,6 +547,10 @@ class X125010837P
             $out .= $claim->payerStreet();
         } else {
             $log .= "*** Missing payer street.\n";
+        }
+        // Add suite number for BCBSMA
+        if (strpos($claim->payerName(), 'BLUE CROSS BLUE SHIELD OF MASSACHUSETTS') !== false) {
+            $out .= "*#1300";
         }
         $out .= "~\n";
 
@@ -957,16 +974,17 @@ class X125010837P
             }
             $out .= "~\n";
 
-            if ($claim->providerTaxonomy()) {
-                ++$edicount;
-                $out .= "PRV" .
-                    "*" . "PE" . // Performing provider
-                    "*" . "PXC" .
-                    "*" . $claim->providerTaxonomy() .
-                    "~\n";
-            } else {
-                $log .= "*** Performing provider has no taxonomy code.\n";
-            }
+            // BCBSMA treats PRV as optional, commenting out to reduce potential errors
+            // if ($claim->providerTaxonomy()) {
+            //     ++$edicount;
+            //     $out .= "PRV" .
+            //         "*" . "PE" . // Performing provider
+            //         "*" . "PXC" .
+            //         "*" . $claim->providerTaxonomy() .
+            //         "~\n";
+            // } else {
+            //     $log .= "*** Performing provider has no taxonomy code.\n";
+            // }
         }
 
         if (!$claim->providerNPIValid()) {

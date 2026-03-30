@@ -786,6 +786,10 @@ class Claim
             $query = "SELECT phonew1 FROM users WHERE id = ?";
             $ores = sqlQuery($query, array($this->x12_partner['x12_submitter_id'] ?? ''));
             $tmp_phone = $this->x12Clean(trim($ores['phonew1'] ?? ''));
+            // Fall back to facility phone if user phone is empty
+            if (empty($tmp_phone)) {
+                $tmp_phone = $this->x12Clean(trim($this->billing_facility['phone']));
+            }
         }
 
         if (
